@@ -1,119 +1,140 @@
-# Log Analyzer Tool
-**Dev Weekend Fellowship Assessment**
+# Log Analyzer
 
-A robust CLI log analyzer that handles messy, real-world log files gracefully — streaming line-by-line, never crashing on bad input, and surfacing meaningful insights fast.
+A tool that takes a server log file and produces a useful diagnostic report. Available as both a **Python CLI** and an **interactive web dashboard**.
+
+**Live web dashboard →** https://kamer-stack.github.io/log-analyzer/web_ui.html
 
 ---
 
-## Quickstart (single command)
+## Two ways to use it
+
+| | CLI (`analyze.py`) | Web dashboard (`web_ui.html`) |
+|---|---|---|
+| Input | File path argument | Paste text or upload a file |
+| Output | Terminal report | Interactive charts + filters |
+| Requires | Python 3.8+ | Any browser — no install |
+| Best for | Scripts, CI, large files | Exploring, sharing results |
+
+---
+
+## CLI quickstart
+
+### 1. Generate a test log file
+
+```bash
+python generate_logs.py --seed 42 --lines 500 --output sample_logs.log
+```
+
+On Windows, set the encoding first:
+
+```powershell
+$env:PYTHONIOENCODING="utf-8"
+python generate_logs.py --seed 42 --lines 500 --output sample_logs.log
+```
+
+### 2. Run the analyzer
 
 ```bash
 python analyze.py sample_logs.log
 ```
 
-That's it. No dependencies beyond Python 3.9+.
-
----
-
-## Setup on a fresh machine
+With options:
 
 ```bash
-# 1. Clone / unzip the project
-cd log-analyzer
-
-# 2. (Optional) Generate sample logs to test with
-python scripts/generate_logs.py --seed 42 --lines 500 --output sample_logs.log
-
-# 3. Run the analyzer
-python analyze.py sample_logs.log
+python analyze.py sample_logs.log --top 10       # show top 10 slowest endpoints
+python analyze.py sample_logs.log --json          # output as JSON
+python analyze.py sample_logs.log --no-color      # plain text (for piping)
 ```
 
-No `pip install` required. The tool uses only Python standard library modules (`re`, `datetime`, `json`, `argparse`, `collections`, `sys`, `os`).
-
----
-
-## Usage
-
-```
-python analyze.py <logfile> [options]
-
-positional arguments:
-  logfile          Path to the log file to analyze
-
-options:
-  --top N, -t N    Show top N results per section (default: 5)
-  --json           Output as JSON instead of a formatted report
-  --no-color       Disable ANSI color (useful for piping to a file)
-  -h, --help       Show this help message
-```
-
-### Examples
+### 3. Run the test suite
 
 ```bash
-# Basic report
-python analyze.py access.log
-
-# Show top 10 slowest endpoints
-python analyze.py access.log --top 10
-
-# Machine-readable JSON output
-python analyze.py access.log --json
-
-# Save plain-text report to file
-python analyze.py access.log --no-color > report.txt
-
-# Generate 2000 lines of test logs then analyze them
-python scripts/generate_logs.py --lines 2000 --output test.log
-python analyze.py test.log
+python test_manual.py
 ```
+
+All 35 tests should pass. Edge case log files used by the tests are in `test_logs/`.
 
 ---
 
-## What the report shows
+## What the output includes
 
-| Section | Details |
-|---|---|
-| **Summary** | Total / valid / malformed / blank / duplicate line counts + malformed % |
-| **Slowest endpoints** | Top N endpoints by average response time, with bar chart |
-| **Status code distribution** | All HTTP status codes with counts and % |
-| **Top IPs** | Top N IPs by request volume |
-| **Traffic by hour** | 24-hour histogram (UTC) |
-| **Anomaly flags** | Negative times, non-standard codes, missing fields, duplicates |
+- **Request summary** — total lines parsed, valid vs malformed count, error rate
+- **Status code distribution** — breakdown of 2xx / 3xx / 4xx / 5xx
+- **Slowest endpoints** — top N endpoints by average response time
+- **Traffic by hour** — request volume across the day
+- **Anomaly flags** — repeated 401s (brute-force), 5xx spikes, slow outliers
+- **Malformed line report** — count of skipped lines, never silently dropped
 
 ---
 
-## Log format supported
+## Log formats supported
 
-Primary format:
+The analyzer handles a deliberately messy mix of real-world formats:
+
 ```
+# Space-separated (assessment spec format)
 2024-03-15T14:23:01Z 192.168.1.42 GET /api/users 200 142ms
+
+# Apache / Nginx combined log
+192.168.1.1 - - [15/Mar/2024:14:23:04 +0000] "GET /api/data HTTP/1.1" 200 534 53ms
+
+# JSON-formatted lines (mixed in mid-file)
+{"timestamp":"2024-03-15T14:23:05Z","method":"GET","path":"/health","status":200,"response_time":1.2}
 ```
 
-The analyzer also handles many real-world variations — see [ANSWERS.md](ANSWERS.md) for the full list of 38 edge cases.
+**Timestamp variants handled:** ISO 8601, slash date (`2024/03/15`), human month (`15-Mar-2024`), Unix epoch  
+**Response time variants:** `142ms`, `0.142s`, bare number `142`  
+**Status code variants:** standard codes, `-` placeholder, missing field  
+**Bad lines:** blank, truncated, stack traces, non-UTF-8, JSON fragments — all skipped with count
+
+---
+
+## Web dashboard
+
+Open `web_ui.html` in any browser — no server or install needed.
+
+**Features:**
+- Drop a `.log` file or paste lines directly
+- Click status bar segments or hour bars to filter the request table
+- Click any IP address to filter by that client
+- Slowest endpoints ranked by average response time
+- Anomaly detection: brute-force attempts, 5xx spikes, slow outliers
+
+Or use the live hosted version: https://kamer-stack.github.io/log-analyzer/web_ui.html
 
 ---
 
 ## Project structure
 
 ```
-log-analyzer/
-├── analyze.py              ← Main CLI analyzer
-├── scripts/
-│   └── generate_logs.py    ← Test log generator (38 edge cases)
-├── README.md               ← This file
-└── ANSWERS.md              ← Assessment questions answered
+log_analyzer/
+├── analyze.py              ← CLI analyzer (main tool)
+├── generate_logs.py        ← test log generator with --seed and --lines flags
+├── web_ui.html             ← standalone browser dashboard (no install)
+├── test_manual.py          ← 35-test edge case verifier
+├── ANSWERS.md              ← assessment questions answered
+├── sample_logs.log         ← example generated log (not committed — generate fresh)
+└── test_logs/
+    ├── edge35_empty.log
+    ├── edge37_all_malformed.log
+    └── edge38_no_final_newline.log
 ```
 
 ---
 
-## Running edge-case tests
+## Requirements
 
-`generate_logs.py` writes individual edge-case files to `test_logs/` automatically:
+- Python 3.8 or later
+- No external packages — standard library only (`re`, `json`, `argparse`, `collections`, `datetime`)
+- Windows: set `$env:PYTHONIOENCODING="utf-8"` before running to enable Unicode bar characters in the terminal report
+
+---
+
+## Running against your own log files
+
+The tool accepts any file path — it does not assume a specific filename, line count, or set of values:
 
 ```bash
-python scripts/generate_logs.py --seed 42
-python analyze.py test_logs/edge35_empty.log        # empty file
-python analyze.py test_logs/edge37_all_malformed.log  # 100% malformed
-python analyze.py test_logs/edge38_no_final_newline.log
-python analyze.py nonexistent.log                   # file not found → clean error
+python analyze.py /path/to/your/server.log
+python analyze.py /path/to/your/server.log --top 20 --json > report.json
 ```
