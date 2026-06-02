@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log Analyzer Dashboard</title>
+<style>
+  :root {
+    --bg: #0f0f0f; --bg2: #1a1a1a; --bg3: #242424;
+    --text: #e0e0e0; --text2: #999; --text3: #666;
+    --border: #2a2a2a; --border2: #333;
+    --green: #4ade80; --green-bg: #0d2e1a; --green-text: #166534;
+    --blue: #60a5fa; --blue-bg: #0d1a2e; --blue-text: #1e40af;
+    --amber: #fb923c; --amber-bg: #2a1a00; --amber-text: #92400e;
+    --red: #f87171; --red-bg: #2a0d0d; --red-text: #991b1b;
+    --gray: #888780;
+    --radius: 10px; --radius-sm: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    font-size: 14px; line-height: 1.5; min-height: 100vh;
+  }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 1.5rem;
+    display: flex; align-items: center; gap: 12px;
+  }
+  header svg { color: var(--blue); }
+  header h1 { font-size: 15px; font-weight: 600; }
+  header span { font-size: 12px; color: var(--text3); margin-left: auto; }
+  main { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+
+  /* Input area */
+  #input-area { margin-bottom: 2rem; }
+  .drop-zone {
+    border: 1px dashed var(--border2); border-radius: var(--radius);
+    padding: 2.5rem; text-align: center; cursor: pointer;
+    transition: background .15s, border-color .15s; margin-bottom: 1rem;
+  }
+  .drop-zone:hover { background: var(--bg2); border-color: #555; }
+  .drop-zone svg { color: var(--text3); margin-bottom: 10px; }
+  .drop-zone p { font-size: 13px; color: var(--text2); margin-top: 6px; }
+  .drop-zone strong { color: var(--text); }
+  .divider { text-align: center; font-size: 12px; color: var(--text3); margin: 1rem 0; position: relative; }
+  .divider::before, .divider::after { content: ''; position: absolute; top: 50%; width: calc(50% - 2rem); height: 1px; background: var(--border); }
+  .divider::before { left: 0; } .divider::after { right: 0; }
+  textarea {
+    width: 100%; height: 140px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text); font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px; padding: 10px 12px; resize: vertical; outline: none;
+  }
+  textarea:focus { border-color: #555; }
+  .btn-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  button {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border2); background: var(--bg2);
+    color: var(--text); font-size: 13px; cursor: pointer; transition: background .12s;
+  }
+  button:hover { background: var(--bg3); }
+  button.primary { background: #1a3a5c; border-color: #2a5a8c; color: #90c4f0; }
+  button.primary:hover { background: #1f4570; }
+
+  /* Dashboard */
+  #dashboard { display: none; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
+  .metric { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .metric .lbl { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 5px; }
+  .metric .val { font-size: 24px; font-weight: 600; line-height: 1; }
+  .metric .sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
+  .metric.danger .val { color: var(--red); }
+
+  .section { margin-bottom: 1.5rem; }
+  .section-hd { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text3); margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+
+  /* Status bar */
+  .status-bar { display: flex; height: 22px; border-radius: 5px; overflow: hidden; margin-bottom: 10px; }
+  .seg { height: 100%; cursor: pointer; transition: opacity .12s; }
+  .seg:hover { opacity: .8; }
+  .seg.s2 { background: #22863a; } .seg.s3 { background: #1a6ea8; }
+  .seg.s4 { background: #a16207; } .seg.s5 { background: #b91c1c; }
+  .seg.sx { background: #555; }
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; }
+  .leg-item { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text2); cursor: pointer; padding: 3px 8px; border-radius: 20px; border: 1px solid transparent; transition: all .12s; }
+  .leg-item:hover, .leg-item.active { border-color: var(--border2); background: var(--bg3); color: var(--text); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* Hour chart */
+  .hour-chart { display: flex; align-items: flex-end; gap: 3px; height: 90px; padding-bottom: 22px; position: relative; }
+  .hcol { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 14px; cursor: pointer; }
+  .hbar { width: 100%; border-radius: 3px 3px 0 0; background: var(--bg3); min-height: 2px; transition: background .12s; }
+  .hbar:hover, .hbar.active { background: var(--blue); }
+  .hlbl { font-size: 9px; color: var(--text3); margin-top: 4px; }
+
+  /* Filters */
+  .filter-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .filter-row label { font-size: 12px; color: var(--text3); }
+  .pill { font-size: 11px; padding: 3px 10px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg2); color: var(--text2); cursor: pointer; transition: all .12s; }
+  .pill:hover { border-color: var(--border2); color: var(--text); }
+  .pill.a2 { background: var(--green-bg); color: var(--green); border-color: #166534; }
+  .pill.a3 { background: var(--blue-bg); color: var(--blue); border-color: #1e40af; }
+  .pill.a4 { background: var(--amber-bg); color: var(--amber); border-color: #92400e; }
+  .pill.a5 { background: var(--red-bg); color: var(--red); border-color: #991b1b; }
+  .pill.ax { background: #1a1a1a; color: #aaa; border-color: #444; }
+
+  /* Table */
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; font-size: 11px; font-weight: 500; color: var(--text3); padding: 8px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--bg2); }
+  td { padding: 7px 12px; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg2); }
+  .mono { font-family: 'SF Mono', 'Fira Code', monospace; }
+  .badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; }
+  .b2 { background: var(--green-bg); color: var(--green); }
+  .b3 { background: var(--blue-bg); color: var(--blue); }
+  .b4 { background: var(--amber-bg); color: var(--amber); }
+  .b5 { background: var(--red-bg); color: var(--red); }
+  .bx { background: #222; color: #888; }
+
+  /* Bar */
+  .bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .bar-bg { flex: 1; height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; min-width: 50px; }
+  .bar-fill { height: 100%; border-radius: 3px; background: var(--blue); }
+  .bar-fill.slow { background: var(--amber); }
+
+  /* Anomalies */
+  .anomaly { display: flex; gap: 10px; align-items: flex-start; background: var(--amber-bg); border: 1px solid #92400e; border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 8px; font-size: 12px; color: var(--amber); }
+  .anomaly svg { flex-shrink: 0; margin-top: 1px; }
+  .anomaly.error { background: var(--red-bg); border-color: #991b1b; color: var(--red); }
+  .anomaly.info { background: var(--bg2); border-color: var(--border2); color: var(--text2); }
+
+  .ip-pill { font-size: 11px; padding: 2px 9px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg2); color: var(--text2); cursor: pointer; transition: all .12s; }
+  .ip-pill:hover { color: var(--text); border-color: var(--border2); }
+  .ip-pill.sel { background: var(--blue-bg); color: var(--blue); border-color: #1e40af; }
+
+  .empty { padding: 2rem; text-align: center; color: var(--text3); font-size: 13px; }
+
+  @media (max-width: 600px) {
+    main { padding: 1rem; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+  <h1>Log Analyzer Dashboard</h1>
+  <span>kamer-stack / log-analyzer</span>
+</header>
+
+<main>
+<div id="input-area">
+  <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-in').click()"
+    ondragover="event.preventDefault()" ondrop="handleDrop(event)">
+    <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+    <p><strong>Drop a .log file here</strong> or click to browse</p>
+    <p>Supports Apache/Nginx combined log, mixed JSON, multi-format</p>
+    <input type="file" id="file-in" accept=".log,.txt" style="display:none" onchange="handleFile(event)">
+  </div>
+  <div class="divider">or paste log lines</div>
+  <textarea id="logpaste" placeholder="2024-03-15T14:23:01Z 192.168.1.42 GET /api/users 200 142ms&#10;2024-03-15T14:23:02Z 10.0.0.7 POST /api/login 401 89ms&#10;192.168.1.1 - - [15/Mar/2024:14:23:04 +0000] &quot;GET /api/data HTTP/1.1&quot; 200 534 53ms&#10;{&quot;timestamp&quot;:&quot;2024-03-15T14:23:05Z&quot;,&quot;method&quot;:&quot;GET&quot;,&quot;path&quot;:&quot;/health&quot;,&quot;status&quot;:200,&quot;response_time&quot;:1.2}"></textarea>
+  <div class="btn-row">
+    <button class="primary" onclick="parsePaste()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Analyze
+    </button>
+    <button onclick="loadSample()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Load sample
+    </button>
+    <button onclick="resetAll()" style="margin-left:auto">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+      Reset
+    </button>
+  </div>
+</div>
+
+<div id="dashboard">
+  <div class="stats-grid" id="stats-grid"></div>
+
+  <div class="section">
+    <div class="section-hd">Status distribution</div>
+    <div class="status-bar" id="status-bar"></div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-hd">
+      Traffic by hour
+      <span id="hour-hint" style="font-size:11px;font-weight:400;color:var(--text3)">click bar to filter</span>
+    </div>
+    <div class="hour-chart" id="hour-chart"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-hd">
+      Requests
+      <span id="req-count" style="font-weight:400;color:var(--text3)"></span>
+    </div>
+    <div class="filter-row" id="status-filters">
+      <label>Status:</label>
+    </div>
+    <div class="filter-row" id="ip-filter-row" style="display:none">
+      <label>IP:</label>
+      <div id="ip-pills" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+      <button style="font-size:11px;padding:2px 8px" onclick="clearIpFilter()">clear</button>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>Endpoint</th><th>Method</th><th>Status</th><th>Resp time</th><th>IP address</th><th>Timestamp</th>
+        </tr></thead>
+        <tbody id="req-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-hd">Slowest endpoints (avg response time)</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Endpoint</th><th>Requests</th><th>Avg resp (ms)</th><th style="width:120px"></th></tr></thead>
+        <tbody id="slow-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-hd">Anomalies & flags</div>
+    <div id="anomaly-list"></div>
+  </div>
+</div>
+</main>
+
+<script>
+let ALL = [], filtered = [], activeStatus = null, activeIp = null, activeHour = null;
+
+const SAMPLE = `2024-03-15T14:23:01Z 192.168.1.42 GET /api/users 200 142ms
+2024-03-15T14:23:02Z 10.0.0.7 POST /api/login 401 89ms
+2024-03-15T14:23:03Z 10.0.0.7 POST /api/login 401 91ms
+2024-03-15T14:23:04Z 10.0.0.7 POST /api/login 401 88ms
+2024-03-15T14:23:05Z 10.0.0.7 POST /api/login 401 95ms
+2024-03-15T14:23:06Z 10.0.0.7 POST /api/login 401 87ms
+2024/03/15 14:24:01 192.168.1.42 GET /api/users/12 200 53ms
+15-Mar-2024 14:25:01 172.16.0.5 PUT /api/config 200 18ms
+1710512581 10.0.0.9 GET /api/search 200 310ms
+192.168.1.1 - - [15/Mar/2024:14:26:04 +0000] "GET /api/products HTTP/1.1" 200 5678 22ms
+192.168.1.20 - - [15/Mar/2024:15:00:01 +0000] "GET /api/reports/monthly HTTP/1.1" 200 98765 4520ms
+192.168.1.30 - - [15/Mar/2024:15:00:05 +0000] "GET /api/reports/monthly HTTP/1.1" 200 98765 0.142s
+192.168.1.10 - - [15/Mar/2024:16:00:01 +0000] "GET /api/users HTTP/1.1" 500 0 0ms
+192.168.1.10 - - [15/Mar/2024:16:00:03 +0000] "GET /api/users HTTP/1.1" 500 0 0ms
+192.168.1.10 - - [15/Mar/2024:16:00:05 +0000] "GET /api/users HTTP/1.1" 502 0 0ms
+{"timestamp":"2024-03-15T17:00:01Z","ip":"172.16.0.1","method":"GET","path":"/health","status":200,"response_time":1.1}
+{"timestamp":"2024-03-15T17:00:05Z","ip":"192.168.1.40","method":"GET","path":"/api/export/csv","status":200,"response_time":8800}
+this is a malformed line - partial write
+2024-03-15T18:00:01Z 10.0.0.3 DELETE /api/users/99 403 8ms
+2024-03-15T18:00:05Z 172.16.0.1 GET /health 200 1ms
+java.lang.NullPointerException at com.example.Handler.handle(Handler.java:42)
+2024-03-15T19:00:01Z 192.168.1.50 GET /api/dashboard 200 280ms
+2024-03-15T19:00:10Z 10.0.0.2 GET /api/users - 12ms
+2024-03-15T20:00:01Z 192.168.1.42 GET /api/users 200 138ms`;
+
+function normalizeRt(val) {
+  if (!val) return null;
+  const s = String(val).trim().toLowerCase();
+  if (s === '-' || s === '') return null;
+  if (s.endsWith('ms')) { const n = parseFloat(s); return isNaN(n) || n < 0 ? null : Math.round(n); }
+  if (s.endsWith('s')) { const n = parseFloat(s); return isNaN(n) || n < 0 ? null : Math.round(n * 1000); }
+  const n = parseFloat(s);
+  if (isNaN(n) || n < 0) return null;
+  return n < 30 ? Math.round(n * 1000) : Math.round(n);
+}
+
+function parseTs(s) {
+  if (!s) return { ts: '', hour: null };
+  // ISO
+  let m = s.match(/(\d{4}-\d{2}-\d{2}T(\d{2}):\d{2}:\d{2})/);
+  if (m) return { ts: m[1], hour: parseInt(m[2]) };
+  // slash
+  m = s.match(/\d{4}\/\d{2}\/\d{2} (\d{2}):\d{2}:\d{2}/);
+  if (m) return { ts: s.substring(0, 19), hour: parseInt(m[1]) };
+  // human
+  m = s.match(/\d{2}-[A-Za-z]{3}-\d{4} (\d{2}):\d{2}:\d{2}/);
+  if (m) return { ts: s.substring(0, 20), hour: parseInt(m[1]) };
+  // Apache bracket
+  m = s.match(/\[([^\]]+)\]/);
+  if (m) { const hm = m[1].match(/:(\d{2}):/); return { ts: m[1], hour: hm ? parseInt(hm[1]) : null }; }
+  // unix epoch
+  if (/^\d{9,11}$/.test(s.trim())) { const d = new Date(parseInt(s) * 1000); return { ts: d.toISOString().substring(0, 19), hour: d.getUTCHours() }; }
+  return { ts: s, hour: null };
+}
+
+function parseLine(line) {
+  line = line.trim();
+  if (!line) return null;
+
+  // JSON format
+  if (line.includes('"method"') && line.includes('"status"')) {
+    try {
+      const start = line.indexOf('{');
+      const obj = JSON.parse(line.substring(start));
+      const rt = normalizeRt(obj.response_time || obj.resp_time || obj.duration);
+      const tsParsed = parseTs(obj.timestamp || '');
+      return { ip: obj.ip || 'json', ts: tsParsed.ts, hour: tsParsed.hour, method: obj.method || '?', path: (obj.path || obj.url || '?').split('?')[0], status: parseInt(obj.status) || 0, rt, raw: line, malformed: false };
+    } catch (e) {}
+  }
+
+  // Space-separated: TIMESTAMP IP METHOD PATH STATUS RT
+  let m = line.match(/^(\d{4}[-\/]\d{2}[-\/]\d{2}[T ]\d{2}:\d{2}:\d{2}[Z\+\-\d]*|\d{9,11}|[\d]{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2}:\d{2})\s+(\S+)\s+(\w+)\s+(\S+)\s+(-|\d+)\s+(.+?)$/);
+  if (m) {
+    const tsParsed = parseTs(m[1]);
+    const status = m[5] === '-' ? 0 : parseInt(m[5]);
+    const rt = normalizeRt(m[6].trim());
+    return { ip: m[2], ts: tsParsed.ts, hour: tsParsed.hour, method: m[3], path: m[4].split('?')[0], status, rt, raw: line, malformed: false };
+  }
+
+  // Apache/Nginx combined log
+  m = line.match(/^(\S+)\s+\S+\s+\S+\s+(\[[^\]]+\])\s+"(\w+)\s+(\S+)[^"]*"\s+(-|\d+)\s+\S+(?:\s+(.+))?$/);
+  if (m) {
+    const tsParsed = parseTs(m[2]);
+    const status = m[5] === '-' ? 0 : parseInt(m[5]);
+    const rt = m[6] ? normalizeRt(m[6].trim().split(/\s+/).find(t => /^[\d.]+(?:ms|s)?$/.test(t))) : null;
+    return { ip: m[1], ts: tsParsed.ts, hour: tsParsed.hour, method: m[3], path: m[4].split('?')[0], status, rt, raw: line, malformed: false };
+  }
+
+  return { ip: '?', ts: '', hour: null, method: '?', path: '?', status: 0, rt: null, raw: line, malformed: true };
+}
+
+function parseText(text) { return text.split('\n').map(parseLine).filter(Boolean); }
+
+function handleFile(e) {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => { document.getElementById('logpaste').value = ev.target.result; parsePaste(); };
+  r.readAsText(f);
+}
+function handleDrop(e) {
+  e.preventDefault();
+  const f = e.dataTransfer.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => { document.getElementById('logpaste').value = ev.target.result; parsePaste(); };
+  r.readAsText(f);
+}
+function loadSample() { document.getElementById('logpaste').value = SAMPLE; parsePaste(); }
+function parsePaste() {
+  const t = document.getElementById('logpaste').value;
+  if (!t.trim()) { alert('Paste some log lines or load the sample first.'); return; }
+  ALL = parseText(t); activeStatus = null; activeIp = null; activeHour = null; render();
+}
+function resetAll() {
+  ALL = []; filtered = []; activeStatus = null; activeIp = null; activeHour = null;
+  document.getElementById('logpaste').value = '';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('input-area').style.display = 'block';
+}
+
+function statusClass(s) {
+  if (s >= 200 && s < 300) return '2xx';
+  if (s >= 300 && s < 400) return '3xx';
+  if (s >= 400 && s < 500) return '4xx';
+  if (s >= 500 && s < 600) return '5xx';
+  return 'other';
+}
+function badgeClass(s) {
+  return { '2xx': 'b2', '3xx': 'b3', '4xx': 'b4', '5xx': 'b5', 'other': 'bx' }[statusClass(s)] || 'bx';
+}
+
+function applyFilters() {
+  filtered = ALL.filter(r => {
+    if (r.malformed) return false;
+    if (activeStatus && statusClass(r.status) !== activeStatus) return false;
+    if (activeIp && r.ip !== activeIp) return false;
+    if (activeHour !== null && r.hour !== activeHour) return false;
+    return true;
+  });
+}
+
+function render() {
+  document.getElementById('input-area').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  applyFilters();
+  renderStats(); renderStatusDist(); renderHourChart();
+  renderFilters(); renderTable(); renderSlow(); renderAnomalies();
+}
+
+function renderStats() {
+  const valid = ALL.filter(r => !r.malformed);
+  const mal = ALL.filter(r => r.malformed).length;
+  const times = valid.filter(r => r.rt !== null).map(r => r.rt);
+  const avgRt = times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : 0;
+  const maxRt = times.length ? Math.round(Math.max(...times)) : 0;
+  const err = valid.filter(r => r.status >= 500).length;
+  const errRate = valid.length ? Math.round(err / valid.length * 100) : 0;
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="metric"><div class="lbl">Total lines</div><div class="val">${ALL.length.toLocaleString()}</div><div class="sub">${mal} malformed / skipped</div></div>
+    <div class="metric"><div class="lbl">Valid requests</div><div class="val">${valid.length.toLocaleString()}</div></div>
+    <div class="metric"><div class="lbl">Avg response</div><div class="val">${avgRt}<span style="font-size:14px;font-weight:400"> ms</span></div></div>
+    <div class="metric"><div class="lbl">Max response</div><div class="val">${maxRt}<span style="font-size:14px;font-weight:400"> ms</span></div></div>
+    <div class="metric${err > 0 ? ' danger' : ''}"><div class="lbl">5xx errors</div><div class="val">${err}</div><div class="sub">${errRate}% error rate</div></div>
+  `;
+}
+
+function renderStatusDist() {
+  const valid = ALL.filter(r => !r.malformed);
+  const counts = {};
+  valid.forEach(r => { const c = statusClass(r.status); counts[c] = (counts[c] || 0) + 1; });
+  const total = valid.length || 1;
+  const order = ['2xx', '3xx', '4xx', '5xx', 'other'];
+  const colors = { '2xx': '#22863a', '3xx': '#1a6ea8', '4xx': '#a16207', '5xx': '#b91c1c', 'other': '#555' };
+  const segClass = { '2xx': 's2', '3xx': 's3', '4xx': 's4', '5xx': 's5', 'other': 'sx' };
+  document.getElementById('status-bar').innerHTML = order.filter(k => counts[k]).map(k =>
+    `<div class="seg ${segClass[k]}" style="flex:${counts[k]}" title="${k}: ${counts[k]}" onclick="toggleStatus('${k}')"></div>`
+  ).join('');
+  const pillClass = { '2xx': 'a2', '3xx': 'a3', '4xx': 'a4', '5xx': 'a5', 'other': 'ax' };
+  document.getElementById('legend').innerHTML = order.filter(k => counts[k]).map(k =>
+    `<span class="leg-item${activeStatus === k ? ' active' : ''}" onclick="toggleStatus('${k}')">
+      <span class="dot" style="background:${colors[k]}"></span>
+      ${k} &mdash; ${counts[k]} (${Math.round(counts[k] / total * 100)}%)
+    </span>`
+  ).join('');
+}
+
+function renderHourChart() {
+  const valid = ALL.filter(r => !r.malformed && r.hour !== null);
+  const byHour = {};
+  for (let i = 0; i < 24; i++) byHour[i] = 0;
+  valid.forEach(r => { byHour[r.hour] = (byHour[r.hour] || 0) + 1; });
+  const max = Math.max(...Object.values(byHour), 1);
+  document.getElementById('hour-chart').innerHTML = Object.entries(byHour).map(([h, c]) =>
+    `<div class="hcol" onclick="toggleHour(${h})" title="${h}:00 — ${c} requests">
+      <div class="hbar${activeHour == h ? ' active' : ''}" style="height:${Math.round(c / max * 68)}px"></div>
+      <div class="hlbl">${h}</div>
+    </div>`
+  ).join('');
+}
+
+function renderFilters() {
+  const row = document.getElementById('status-filters');
+  row.innerHTML = '<label>Status:</label>';
+  const pillClass = { '2xx': 'a2', '3xx': 'a3', '4xx': 'a4', '5xx': 'a5', 'other': 'ax' };
+  ['2xx', '3xx', '4xx', '5xx', 'other'].forEach(s => {
+    const b = document.createElement('span');
+    b.className = 'pill' + (activeStatus === s ? ' ' + pillClass[s] : '');
+    b.textContent = s; b.onclick = () => toggleStatus(s); row.appendChild(b);
+  });
+  const ips = [...new Set(filtered.map(r => r.ip))].filter(ip => ip !== '?' && ip !== 'json').sort();
+  const ipRow = document.getElementById('ip-filter-row');
+  if (ips.length > 1) {
+    ipRow.style.display = 'flex';
+    document.getElementById('ip-pills').innerHTML = ips.slice(0, 15).map(ip =>
+      `<span class="ip-pill${activeIp === ip ? ' sel' : ''}" onclick="toggleIp('${ip}')">${ip}</span>`
+    ).join('');
+  } else { ipRow.style.display = 'none'; }
+}
+
+function renderTable() {
+  const show = filtered.slice(0, 300);
+  const total = filtered.length;
+  document.getElementById('req-count').textContent = total > 300 ? `(showing 300 of ${total.toLocaleString()})` : `(${total.toLocaleString()} requests)`;
+  if (!show.length) { document.getElementById('req-body').innerHTML = `<tr><td colspan="6" class="empty">No matching requests</td></tr>`; return; }
+  document.getElementById('req-body').innerHTML = show.map(r => `<tr>
+    <td class="mono" style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${r.path}</td>
+    <td style="font-size:11px;font-weight:600;color:var(--text2)">${r.method}</td>
+    <td><span class="badge ${badgeClass(r.status)}">${r.status || '—'}</span></td>
+    <td class="mono">${r.rt !== null ? r.rt + 'ms' : '—'}</td>
+    <td style="font-size:11px;color:var(--text2);cursor:pointer" onclick="toggleIp('${r.ip}')">${r.ip}</td>
+    <td style="font-size:11px;color:var(--text3)">${r.ts ? r.ts.substring(0, 19) : '—'}</td>
+  </tr>`).join('');
+}
+
+function renderSlow() {
+  const valid = filtered.filter(r => r.rt !== null);
+  const byPath = {};
+  valid.forEach(r => { if (!byPath[r.path]) byPath[r.path] = { total: 0, count: 0 }; byPath[r.path].total += r.rt; byPath[r.path].count++; });
+  const sorted = Object.entries(byPath).map(([p, v]) => ({ path: p, avg: Math.round(v.total / v.count), count: v.count })).sort((a, b) => b.avg - a.avg).slice(0, 10);
+  const maxAvg = sorted.length ? sorted[0].avg : 1;
+  if (!sorted.length) { document.getElementById('slow-body').innerHTML = `<tr><td colspan="4" class="empty">No timing data</td></tr>`; return; }
+  document.getElementById('slow-body').innerHTML = sorted.map(r => `<tr>
+    <td class="mono" style="max-width:220px;overflow:hidden;text-overflow:ellipsis">${r.path}</td>
+    <td>${r.count}</td>
+    <td>${r.avg.toLocaleString()}</td>
+    <td><div class="bar-wrap"><div class="bar-bg"><div class="bar-fill slow" style="width:${Math.round(r.avg / maxAvg * 100)}%"></div></div></div></td>
+  </tr>`).join('');
+}
+
+function renderAnomalies() {
+  const flags = [];
+  const valid = ALL.filter(r => !r.malformed);
+  const err5xx = valid.filter(r => r.status >= 500);
+  if (err5xx.length) {
+    const paths = [...new Set(err5xx.map(r => r.path))].join(', ');
+    flags.push({ cls: 'error', msg: `${err5xx.length} server error(s) (5xx) detected on: ${paths}` });
+  }
+  const ipStatus = {};
+  valid.forEach(r => { if (!ipStatus[r.ip]) ipStatus[r.ip] = {}; ipStatus[r.ip][r.status] = (ipStatus[r.ip][r.status] || 0) + 1; });
+  Object.entries(ipStatus).forEach(([ip, codes]) => {
+    const fails = Object.entries(codes).filter(([s]) => parseInt(s) === 401).reduce((a, [, v]) => a + v, 0);
+    if (fails >= 4) flags.push({ cls: '', msg: `Possible brute-force: IP ${ip} made ${fails} consecutive 401 (Unauthorized) requests` });
+  });
+  const times = valid.filter(r => r.rt !== null).map(r => r.rt);
+  if (times.length) {
+    const avg = times.reduce((a, b) => a + b, 0) / times.length;
+    const slow = valid.filter(r => r.rt !== null && r.rt > avg * 5);
+    if (slow.length) flags.push({ cls: '', msg: `${slow.length} request(s) with response time 5× above average (avg ${Math.round(avg)}ms). Endpoints: ${[...new Set(slow.map(r => r.path))].join(', ')}` });
+  }
+  const mal = ALL.filter(r => r.malformed).length;
+  if (mal) flags.push({ cls: 'info', msg: `${mal} malformed / unparseable line(s) were skipped and counted separately` });
+  if (!flags.length) { document.getElementById('anomaly-list').innerHTML = `<p style="font-size:13px;color:var(--text3)">No anomalies detected in current view.</p>`; return; }
+  document.getElementById('anomaly-list').innerHTML = flags.map(f =>
+    `<div class="anomaly ${f.cls}">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:1px"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span>${f.msg}</span>
+    </div>`
+  ).join('');
+}
+
+function toggleStatus(s) { activeStatus = activeStatus === s ? null : s; render(); }
+function toggleIp(ip) { activeIp = activeIp === ip ? null : ip; render(); }
+function clearIpFilter() { activeIp = null; render(); }
+function toggleHour(h) { activeHour = activeHour == h ? null : h; render(); }
+</script>
+</body>
+</html>
