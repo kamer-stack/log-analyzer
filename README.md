@@ -121,6 +121,15 @@ log_analyzer/
 ```
 
 ---
+## Screenshots
+
+### CLI Report
+![Terminal report](screenshots/terminal_report.png)
+
+### Web Dashboard
+![Web UI](screenshots/web_ui_dashboard.png)
+---
+
 
 ## Requirements
 
